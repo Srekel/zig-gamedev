@@ -219,7 +219,7 @@ pub fn build(b: *std.Build) void {
                 },
                 .flags = cflags,
             });
-            imgui.linkSystemLibrary("d3dcompiler_47");
+            imgui.linkSystemLibrary("dxgi");
         },
         .win32_dx12 => {
             imgui.addCSourceFiles(.{
@@ -229,7 +229,7 @@ pub fn build(b: *std.Build) void {
                 },
                 .flags = cflags,
             });
-            imgui.linkSystemLibrary("d3dcompiler_47");
+            imgui.linkSystemLibrary("dxgi");
             imgui.linkSystemLibrary("dwmapi");
         },
         .glfw => {

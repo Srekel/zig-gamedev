@@ -7,6 +7,8 @@ pub fn init(
     num_frames_in_flight: u32,
     rtv_format: c_uint, // DXGI_FORMAT
     cbv_srv_heap: *const anyopaque, // ID3D12DescriptorHeap
+    root_signature: *const anyopaque, // ID3D12RootSignature
+    pipeline_state: *const anyopaque, // ID3D12PipelineState
     font_srv_cpu_desc_handle: D3D12_CPU_DESCRIPTOR_HANDLE,
     font_srv_gpu_desc_handle: D3D12_GPU_DESCRIPTOR_HANDLE,
 ) void {
@@ -17,6 +19,8 @@ pub fn init(
         num_frames_in_flight,
         rtv_format,
         cbv_srv_heap,
+        root_signature,
+        pipeline_state,
         font_srv_cpu_desc_handle,
         font_srv_gpu_desc_handle,
     )) {
@@ -61,6 +65,8 @@ extern fn ImGui_ImplDX12_Init(
     num_frames_in_flight: u32,
     rtv_format: u32, // DXGI_FORMAT
     cbv_srv_heap: *const anyopaque, // ID3D12DescriptorHeap
+    root_signature: *const anyopaque, // ID3D12RootSignature
+    pipeline_state: *const anyopaque, // ID3D12PipelineState
     font_srv_cpu_desc_handle: D3D12_CPU_DESCRIPTOR_HANDLE,
     font_srv_gpu_desc_handle: D3D12_GPU_DESCRIPTOR_HANDLE,
 ) bool;
