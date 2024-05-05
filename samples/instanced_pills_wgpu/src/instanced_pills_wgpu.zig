@@ -134,6 +134,8 @@ const DemoState = struct {
                 .fn_getWin32Window = @ptrCast(&zglfw.getWin32Window),
                 .fn_getX11Display = @ptrCast(&zglfw.getX11Display),
                 .fn_getX11Window = @ptrCast(&zglfw.getX11Window),
+                .fn_getWaylandDisplay = @ptrCast(&zglfw.getWaylandDisplay),
+                .fn_getWaylandSurface = @ptrCast(&zglfw.getWaylandWindow),
                 .fn_getCocoaWindow = @ptrCast(&zglfw.getCocoaWindow),
             },
             .{},
@@ -315,7 +317,7 @@ const DemoState = struct {
         const dx = v1[0] - v0[0];
         const dy = v1[1] - v0[1];
         const length = @sqrt(dx * dx + dy * dy);
-        const angle = math.atan2(f32, dy, dx);
+        const angle = math.atan2(dy, dx);
         const position = .{ (v0[0] + v1[0]) / 2.0, (v0[1] + v1[1]) / 2.0 };
         try demo.addPill(.{
             .width = width,
@@ -776,7 +778,7 @@ pub fn main() !void {
     {
         var buffer: [1024]u8 = undefined;
         const path = std.fs.selfExeDirPath(buffer[0..]) catch ".";
-        std.os.chdir(path) catch {};
+        std.posix.chdir(path) catch {};
     }
 
     zglfw.windowHintTyped(.client_api, .no_api);

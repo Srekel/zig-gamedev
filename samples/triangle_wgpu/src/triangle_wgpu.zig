@@ -63,6 +63,8 @@ fn init(allocator: std.mem.Allocator, window: *zglfw.Window) !DemoState {
             .fn_getWin32Window = @ptrCast(&zglfw.getWin32Window),
             .fn_getX11Display = @ptrCast(&zglfw.getX11Display),
             .fn_getX11Window = @ptrCast(&zglfw.getX11Window),
+            .fn_getWaylandDisplay = @ptrCast(&zglfw.getWaylandDisplay),
+            .fn_getWaylandSurface = @ptrCast(&zglfw.getWaylandWindow),
             .fn_getCocoaWindow = @ptrCast(&zglfw.getCocoaWindow),
         },
         .{},
@@ -78,7 +80,7 @@ fn init(allocator: std.mem.Allocator, window: *zglfw.Window) !DemoState {
     const pipeline_layout = gctx.createPipelineLayout(&.{bind_group_layout});
     defer gctx.releaseResource(pipeline_layout);
 
-    const pipeline = pipline: {
+    const pipeline = pipeline: {
         const vs_module = zgpu.createWgslShaderModule(gctx.device, wgsl_vs, "vs");
         defer vs_module.release();
 
@@ -123,7 +125,7 @@ fn init(allocator: std.mem.Allocator, window: *zglfw.Window) !DemoState {
                 .targets = &color_targets,
             },
         };
-        break :pipline gctx.createRenderPipeline(pipeline_layout, pipeline_descriptor);
+        break :pipeline gctx.createRenderPipeline(pipeline_layout, pipeline_descriptor);
     };
 
     const bind_group = gctx.createBindGroup(bind_group_layout, &[_]zgpu.BindGroupEntryInfo{
@@ -326,7 +328,7 @@ pub fn main() !void {
     {
         var buffer: [1024]u8 = undefined;
         const path = std.fs.selfExeDirPath(buffer[0..]) catch ".";
-        std.os.chdir(path) catch {};
+        std.posix.chdir(path) catch {};
     }
 
     zglfw.windowHintTyped(.client_api, .no_api);

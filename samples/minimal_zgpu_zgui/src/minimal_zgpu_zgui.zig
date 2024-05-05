@@ -16,7 +16,7 @@ pub fn main() !void {
     {
         var buffer: [1024]u8 = undefined;
         const path = std.fs.selfExeDirPath(buffer[0..]) catch ".";
-        std.os.chdir(path) catch {};
+        std.posix.chdir(path) catch {};
     }
 
     zglfw.windowHintTyped(.client_api, .no_api);
@@ -38,6 +38,8 @@ pub fn main() !void {
             .fn_getWin32Window = @ptrCast(&zglfw.getWin32Window),
             .fn_getX11Display = @ptrCast(&zglfw.getX11Display),
             .fn_getX11Window = @ptrCast(&zglfw.getX11Window),
+            .fn_getWaylandDisplay = @ptrCast(&zglfw.getWaylandDisplay),
+            .fn_getWaylandSurface = @ptrCast(&zglfw.getWaylandWindow),
             .fn_getCocoaWindow = @ptrCast(&zglfw.getCocoaWindow),
         },
         .{},

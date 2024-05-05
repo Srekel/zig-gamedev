@@ -918,6 +918,138 @@ pub const GraphicsContext = struct {
         return gctx.resource_pool.addResource(resource, initial_state);
     }
 
+    pub fn createConstantBuffer(
+        gctx: *GraphicsContext,
+        comptime T: type,
+    ) HResultError!struct { resource: ResourceHandle, view_handle: d3d12.CPU_DESCRIPTOR_HANDLE, ptr: *T } {
+        switch (@typeInfo(T)) {
+            .Struct => |s| {
+                if (s.layout != .@"extern") {
+                    @compileError(@typeName(T) ++ " must be extern");
+                }
+            },
+            else => {},
+        }
+        const buffer_length = buffer_length: {
+            const buffer_length: w32.UINT = @sizeOf(T);
+            break :buffer_length buffer_length + d3d12.CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT - @mod(buffer_length, d3d12.CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+        };
+        const resource_handle = try gctx.createCommittedResource(
+            .UPLOAD,
+            .{},
+            &d3d12.RESOURCE_DESC.initBuffer(buffer_length),
+            d3d12.RESOURCE_STATES.GENERIC_READ,
+            null,
+        );
+        const resource = gctx.lookupResource(resource_handle).?;
+
+        var buffer: [*]u8 = undefined;
+        try hrErrorOnFail(resource.Map(
+            0,
+            &.{ .Begin = 0, .End = 0 },
+            @ptrCast(&buffer),
+        ));
+
+        const view_handle = gctx.allocateCpuDescriptors(.CBV_SRV_UAV, 1);
+        gctx.device.CreateConstantBufferView(&.{
+            .BufferLocation = resource.GetGPUVirtualAddress(),
+            .SizeInBytes = buffer_length,
+        }, view_handle);
+        return .{
+            .resource = resource_handle,
+            .view_handle = view_handle,
+            .ptr = @ptrCast(@alignCast(buffer)),
+        };
+    }
+
+    pub fn uploadVertices(
+        gctx: *GraphicsContext,
+        comptime T: type,
+        vertices: []const T,
+    ) HResultError!struct { resource: ResourceHandle, view: d3d12.VERTEX_BUFFER_VIEW } {
+        switch (@typeInfo(T)) {
+            .Struct => |s| {
+                if (s.layout != .@"extern") {
+                    @compileError(@typeName(T) ++ " must be extern");
+                }
+            },
+            else => {},
+        }
+        const buffer_length: w32.UINT = @intCast(vertices.len * @sizeOf(T));
+        const resource_handle = try gctx.createCommittedResource(
+            .UPLOAD,
+            .{},
+            &d3d12.RESOURCE_DESC.initBuffer(buffer_length),
+            d3d12.RESOURCE_STATES.GENERIC_READ,
+            null,
+        );
+        const resource = gctx.lookupResource(resource_handle).?;
+        {
+            var mapped_buffer: [*]u8 = undefined;
+            try hrErrorOnFail(resource.Map(
+                0,
+                &.{ .Begin = 0, .End = 0 },
+                @ptrCast(&mapped_buffer),
+            ));
+            defer resource.Unmap(0, null);
+            const mapped_slice = std.mem.bytesAsSlice(T, mapped_buffer[0..buffer_length]);
+            @memcpy(mapped_slice, vertices);
+        }
+
+        return .{
+            .resource = resource_handle,
+            .view = .{
+                .BufferLocation = resource.GetGPUVirtualAddress(),
+                .StrideInBytes = @sizeOf(T),
+                .SizeInBytes = buffer_length,
+            },
+        };
+    }
+
+    pub fn uploadVertexIndices(
+        gctx: *GraphicsContext,
+        comptime T: type,
+        vertex_indices: []const T,
+    ) HResultError!struct { resource: ResourceHandle, view: d3d12.INDEX_BUFFER_VIEW } {
+        switch (T) {
+            u16, u32 => {},
+            else => @compileError(@typeName(T) ++ " is not a supported vertex index format"),
+        }
+        const buffer_length: w32.UINT = @intCast(vertex_indices.len * @sizeOf(T));
+        const resource_handle = try gctx.createCommittedResource(
+            .UPLOAD,
+            .{},
+            &d3d12.RESOURCE_DESC.initBuffer(buffer_length),
+            d3d12.RESOURCE_STATES.GENERIC_READ,
+            null,
+        );
+        const resource = gctx.lookupResource(resource_handle).?;
+        {
+            var mapped_buffer: [*]u8 = undefined;
+            try hrErrorOnFail(resource.Map(
+                0,
+                &.{ .Begin = 0, .End = 0 },
+                @ptrCast(&mapped_buffer),
+            ));
+            defer resource.Unmap(0, null);
+            const mapped_slice = std.mem.bytesAsSlice(T, mapped_buffer[0..buffer_length]);
+            @memcpy(mapped_slice, vertex_indices);
+        }
+
+        return .{
+            .resource = resource_handle,
+            .view = .{
+                .BufferLocation = resource.GetGPUVirtualAddress(),
+                .Format = switch (T) {
+                    u16 => .R16_UINT,
+                    u32 => .R32_UINT,
+                    else => unreachable,
+                },
+                .SizeInBytes = buffer_length,
+            },
+        };
+    }
+
     pub fn destroyResource(gctx: GraphicsContext, handle: ResourceHandle) void {
         gctx.resource_pool.destroyResource(handle);
     }
@@ -975,69 +1107,9 @@ pub const GraphicsContext = struct {
 
     pub fn createGraphicsShaderPipeline(
         gctx: *GraphicsContext,
-        arena: std.mem.Allocator,
         pso_desc: *d3d12.GRAPHICS_PIPELINE_STATE_DESC,
-        vs_cso_path: ?[]const u8,
-        ps_cso_path: ?[]const u8,
     ) PipelineHandle {
-        return createGraphicsShaderPipelineVsGsPs(gctx, arena, pso_desc, vs_cso_path, null, ps_cso_path);
-    }
-
-    pub fn createGraphicsShaderPipelineVsGsPs(
-        gctx: *GraphicsContext,
-        arena: std.mem.Allocator,
-        pso_desc: *d3d12.GRAPHICS_PIPELINE_STATE_DESC,
-        vs_cso_path: ?[]const u8,
-        gs_cso_path: ?[]const u8,
-        ps_cso_path: ?[]const u8,
-    ) PipelineHandle {
-        return createGraphicsShaderPipelineRsVsGsPs(
-            gctx,
-            arena,
-            pso_desc,
-            null,
-            vs_cso_path,
-            gs_cso_path,
-            ps_cso_path,
-        );
-    }
-
-    pub fn createGraphicsShaderPipelineRsVsGsPs(
-        gctx: *GraphicsContext,
-        arena: std.mem.Allocator,
-        pso_desc: *d3d12.GRAPHICS_PIPELINE_STATE_DESC,
-        root_signature: ?*d3d12.IRootSignature,
-        vs_cso_relpath: ?[]const u8,
-        gs_cso_relpath: ?[]const u8,
-        ps_cso_relpath: ?[]const u8,
-    ) PipelineHandle {
-        const self_exe_dir_path = std.fs.selfExeDirPathAlloc(arena) catch unreachable;
-
-        if (vs_cso_relpath) |relpath| {
-            const abspath = std.fs.path.join(arena, &.{ self_exe_dir_path, relpath }) catch unreachable;
-            const vs_file = std.fs.openFileAbsolute(abspath, .{}) catch unreachable;
-            defer vs_file.close();
-            const vs_code = vs_file.reader().readAllAlloc(arena, 256 * 1024) catch unreachable;
-            pso_desc.VS = .{ .pShaderBytecode = vs_code.ptr, .BytecodeLength = vs_code.len };
-        } else {
-            assert(pso_desc.VS.pShaderBytecode != null);
-        }
-
-        if (gs_cso_relpath) |relpath| {
-            const abspath = std.fs.path.join(arena, &.{ self_exe_dir_path, relpath }) catch unreachable;
-            const gs_file = std.fs.openFileAbsolute(abspath, .{}) catch unreachable;
-            defer gs_file.close();
-            const gs_code = gs_file.reader().readAllAlloc(arena, 256 * 1024) catch unreachable;
-            pso_desc.GS = .{ .pShaderBytecode = gs_code.ptr, .BytecodeLength = gs_code.len };
-        }
-
-        if (ps_cso_relpath) |relpath| {
-            const abspath = std.fs.path.join(arena, &.{ self_exe_dir_path, relpath }) catch unreachable;
-            const ps_file = std.fs.openFileAbsolute(abspath, .{}) catch unreachable;
-            defer ps_file.close();
-            const ps_code = ps_file.reader().readAllAlloc(arena, 256 * 1024) catch unreachable;
-            pso_desc.PS = .{ .pShaderBytecode = ps_code.ptr, .BytecodeLength = ps_code.len };
-        }
+        assert(pso_desc.VS.pShaderBytecode != null);
 
         const hash = compute_hash: {
             var hasher = std.hash.Adler32.init();
@@ -1088,23 +1160,16 @@ pub const GraphicsContext = struct {
             return handle;
         }
 
-        const rs = blk: {
-            if (root_signature) |rs| {
-                break :blk rs;
-            } else {
-                var rs: *d3d12.IRootSignature = undefined;
-                hrPanicOnFail(gctx.device.CreateRootSignature(
-                    0,
-                    pso_desc.VS.pShaderBytecode.?,
-                    pso_desc.VS.BytecodeLength,
-                    &d3d12.IID_IRootSignature,
-                    @as(*?*anyopaque, @ptrCast(&rs)),
-                ));
-                break :blk rs;
-            }
-        };
-
-        pso_desc.pRootSignature = rs;
+        if (pso_desc.pRootSignature == null) {
+            pso_desc.pRootSignature = undefined;
+            hrPanicOnFail(gctx.device.CreateRootSignature(
+                0,
+                pso_desc.VS.pShaderBytecode.?,
+                pso_desc.VS.BytecodeLength,
+                &d3d12.IID_IRootSignature,
+                @as(*?*anyopaque, @ptrCast(&pso_desc.pRootSignature.?)),
+            ));
+        }
 
         const pso = blk: {
             var pso: *d3d12.IPipelineState = undefined;
@@ -1116,46 +1181,15 @@ pub const GraphicsContext = struct {
             break :blk pso;
         };
 
-        return gctx.pipeline_pool.addPipeline(pso, rs, .Graphics, hash);
+        return gctx.pipeline_pool.addPipeline(pso, pso_desc.pRootSignature.?, .Graphics, hash);
     }
 
     pub fn createMeshShaderPipeline(
         gctx: *GraphicsContext,
-        arena: std.mem.Allocator,
         pso_desc: *d3d12.MESH_SHADER_PIPELINE_STATE_DESC,
-        as_cso_relpath: ?[]const u8,
-        ms_cso_relpath: ?[]const u8,
-        ps_cso_relpath: ?[]const u8,
     ) PipelineHandle {
-        const self_exe_dir_path = std.fs.selfExeDirPathAlloc(arena) catch unreachable;
-
-        if (as_cso_relpath) |relpath| {
-            const abspath = std.fs.path.join(arena, &.{ self_exe_dir_path, relpath }) catch unreachable;
-            const as_file = std.fs.openFileAbsolute(abspath, .{}) catch unreachable;
-            defer as_file.close();
-            const as_code = as_file.reader().readAllAlloc(arena, 256 * 1024) catch unreachable;
-            pso_desc.AS = .{ .pShaderBytecode = as_code.ptr, .BytecodeLength = as_code.len };
-        }
-
-        if (ms_cso_relpath) |relpath| {
-            const abspath = std.fs.path.join(arena, &.{ self_exe_dir_path, relpath }) catch unreachable;
-            const ms_file = std.fs.openFileAbsolute(abspath, .{}) catch unreachable;
-            defer ms_file.close();
-            const ms_code = ms_file.reader().readAllAlloc(arena, 256 * 1024) catch unreachable;
-            pso_desc.MS = .{ .pShaderBytecode = ms_code.ptr, .BytecodeLength = ms_code.len };
-        } else {
-            assert(pso_desc.MS.pShaderBytecode != null);
-        }
-
-        if (ps_cso_relpath) |relpath| {
-            const abspath = std.fs.path.join(arena, &.{ self_exe_dir_path, relpath }) catch unreachable;
-            const ps_file = std.fs.openFileAbsolute(abspath, .{}) catch unreachable;
-            defer ps_file.close();
-            const ps_code = ps_file.reader().readAllAlloc(arena, 256 * 1024) catch unreachable;
-            pso_desc.PS = .{ .pShaderBytecode = ps_code.ptr, .BytecodeLength = ps_code.len };
-        } else {
-            assert(pso_desc.PS.pShaderBytecode != null);
-        }
+        assert(pso_desc.MS.pShaderBytecode != null);
+        assert(pso_desc.PS.pShaderBytecode != null);
 
         const hash = compute_hash: {
             var hasher = std.hash.Adler32.init();
@@ -1189,19 +1223,16 @@ pub const GraphicsContext = struct {
             return handle;
         }
 
-        const rs = blk: {
-            var rs: *d3d12.IRootSignature = undefined;
+        if (pso_desc.pRootSignature == null) {
+            pso_desc.pRootSignature = undefined;
             hrPanicOnFail(gctx.device.CreateRootSignature(
                 0,
                 pso_desc.MS.pShaderBytecode.?,
                 pso_desc.MS.BytecodeLength,
                 &d3d12.IID_IRootSignature,
-                @as(*?*anyopaque, @ptrCast(&rs)),
+                @as(*?*anyopaque, @ptrCast(&pso_desc.pRootSignature.?)),
             ));
-            break :blk rs;
-        };
-
-        pso_desc.pRootSignature = rs;
+        }
 
         const pso = blk: {
             var stream = d3d12.PIPELINE_MESH_STATE_STREAM.init(pso_desc.*);
@@ -1217,27 +1248,14 @@ pub const GraphicsContext = struct {
             break :blk pso;
         };
 
-        return gctx.pipeline_pool.addPipeline(pso, rs, .Graphics, hash);
+        return gctx.pipeline_pool.addPipeline(pso, pso_desc.pRootSignature.?, .Graphics, hash);
     }
 
     pub fn createComputeShaderPipeline(
         gctx: *GraphicsContext,
-        arena: std.mem.Allocator,
         pso_desc: *d3d12.COMPUTE_PIPELINE_STATE_DESC,
-        cs_cso_relpath: ?[]const u8,
     ) PipelineHandle {
-        if (cs_cso_relpath) |relpath| {
-            const abspath = std.fs.path.join(arena, &.{
-                std.fs.selfExeDirPathAlloc(arena) catch unreachable,
-                relpath,
-            }) catch unreachable;
-            const cs_file = std.fs.openFileAbsolute(abspath, .{}) catch unreachable;
-            defer cs_file.close();
-            const cs_code = cs_file.reader().readAllAlloc(arena, 256 * 1024) catch unreachable;
-            pso_desc.CS = .{ .pShaderBytecode = cs_code.ptr, .BytecodeLength = cs_code.len };
-        } else {
-            assert(pso_desc.CS.pShaderBytecode != null);
-        }
+        assert(pso_desc.CS.pShaderBytecode != null);
 
         const hash = compute_hash: {
             var hasher = std.hash.Adler32.init();
@@ -1254,19 +1272,16 @@ pub const GraphicsContext = struct {
             return handle;
         }
 
-        const rs = blk: {
-            var rs: *d3d12.IRootSignature = undefined;
+        if (pso_desc.pRootSignature == null) {
+            pso_desc.pRootSignature = undefined;
             hrPanicOnFail(gctx.device.CreateRootSignature(
                 0,
                 pso_desc.CS.pShaderBytecode.?,
                 pso_desc.CS.BytecodeLength,
                 &d3d12.IID_IRootSignature,
-                @as(*?*anyopaque, @ptrCast(&rs)),
+                @as(*?*anyopaque, @ptrCast(&pso_desc.pRootSignature.?)),
             ));
-            break :blk rs;
-        };
-
-        pso_desc.pRootSignature = rs;
+        }
 
         const pso = blk: {
             var pso: *d3d12.IPipelineState = undefined;
@@ -1278,7 +1293,7 @@ pub const GraphicsContext = struct {
             break :blk pso;
         };
 
-        return gctx.pipeline_pool.addPipeline(pso, rs, .Compute, hash);
+        return gctx.pipeline_pool.addPipeline(pso, pso_desc.pRootSignature.?, .Compute, hash);
     }
 
     pub fn setCurrentPipeline(gctx: *GraphicsContext, pipeline_handle: PipelineHandle) void {
@@ -1740,10 +1755,9 @@ pub const MipmapGenerator = struct {
     format: dxgi.FORMAT,
 
     pub fn init(
-        arena: std.mem.Allocator,
         gctx: *GraphicsContext,
         format: dxgi.FORMAT,
-        comptime content_dir: []const u8,
+        generate_mipmap_bytecode: d3d12.SHADER_BYTECODE,
     ) MipmapGenerator {
         var width: u32 = 2048 / 2;
         var height: u32 = 2048 / 2;
@@ -1777,12 +1791,9 @@ pub const MipmapGenerator = struct {
             cpu_handle.ptr += gctx.cbv_srv_uav_cpu_heap.descriptor_size;
         }
 
-        var desc = d3d12.COMPUTE_PIPELINE_STATE_DESC.initDefault();
-        const pipeline = gctx.createComputeShaderPipeline(
-            arena,
-            &desc,
-            content_dir ++ "shaders/generate_mipmaps.cs.cso",
-        );
+        var desc = d3d12.COMPUTE_PIPELINE_STATE_DESC{};
+        desc.CS = generate_mipmap_bytecode;
+        const pipeline = gctx.createComputeShaderPipeline(&desc);
 
         return .{
             .pipeline = pipeline,

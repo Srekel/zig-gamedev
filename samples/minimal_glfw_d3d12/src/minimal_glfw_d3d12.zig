@@ -4,6 +4,7 @@ const zwin32 = @import("zwin32");
 const zd3d12 = @import("zd3d12");
 const w32 = zwin32.w32;
 const d3d12 = zwin32.d3d12;
+const common = @import("common");
 
 pub export const D3D12SDKVersion: u32 = 610;
 pub export const D3D12SDKPath: [*:0]const u8 = ".\\d3d12\\";
@@ -35,18 +36,32 @@ pub fn main() !void {
 
         var pso_desc = d3d12.GRAPHICS_PIPELINE_STATE_DESC.initDefault();
         pso_desc.DepthStencilState.DepthEnable = w32.FALSE;
+        pso_desc.InputLayout = d3d12.INPUT_LAYOUT_DESC.init(&[_]d3d12.INPUT_ELEMENT_DESC{
+            d3d12.INPUT_ELEMENT_DESC.init("POSITION", 0, .R32G32_FLOAT, 0, 0, .PER_VERTEX_DATA, 0),
+        });
         pso_desc.RTVFormats[0] = .R8G8B8A8_UNORM;
         pso_desc.NumRenderTargets = 1;
-        pso_desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xf;
         pso_desc.PrimitiveTopologyType = .TRIANGLE;
+        pso_desc.VS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "minimal_glfw_d3d12.vs.cso", null));
+        pso_desc.PS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "minimal_glfw_d3d12.ps.cso", null));
 
-        break :pipeline gctx.createGraphicsShaderPipeline(
-            arena_allocator,
-            &pso_desc,
-            content_dir ++ "minimal_glfw_d3d12.vs.cso",
-            content_dir ++ "minimal_glfw_d3d12.ps.cso",
-        );
+        break :pipeline gctx.createGraphicsShaderPipeline(&pso_desc);
     };
+
+    const Vertex = extern struct {
+        position: [2]f32,
+    };
+    const gpu_vertices = try gctx.uploadVertices(Vertex, &[_]Vertex{
+        .{ .position = [_]f32{ -0.9, -0.9 } },
+        .{ .position = [_]f32{ 0.0, 0.9 } },
+        .{ .position = [_]f32{ 0.9, -0.9 } },
+    });
+    const gpu_vertex_indices = try gctx.uploadVertexIndices(u16, &[_]u16{ 0, 1, 2 });
+
+    const Input = extern struct {
+        mouse_position: [2]f32,
+    };
+    var input = try gctx.createConstantBuffer(Input);
 
     var frac: f32 = 0.0;
     var frac_delta: f32 = 0.0001;
@@ -93,8 +108,22 @@ pub fn main() !void {
             );
 
             gctx.setCurrentPipeline(pipeline);
+
+            {
+                const cursor_pos = glfw_window.getCursorPos();
+                input.ptr.mouse_position = [_]f32{
+                    @floatCast(cursor_pos[0]),
+                    @floatCast(cursor_pos[1]),
+                };
+
+                const resource = gctx.lookupResource(input.resource).?;
+                gctx.cmdlist.SetGraphicsRootConstantBufferView(0, resource.GetGPUVirtualAddress());
+            }
+
             gctx.cmdlist.IASetPrimitiveTopology(.TRIANGLELIST);
-            gctx.cmdlist.DrawInstanced(3, 1, 0, 0);
+            gctx.cmdlist.IASetVertexBuffers(0, 1, &[_]d3d12.VERTEX_BUFFER_VIEW{gpu_vertices.view});
+            gctx.cmdlist.IASetIndexBuffer(&gpu_vertex_indices.view);
+            gctx.cmdlist.DrawIndexedInstanced(3, 1, 0, 0, 0);
 
             gctx.addTransitionBarrier(back_buffer.resource_handle, d3d12.RESOURCE_STATES.PRESENT);
             gctx.flushResourceBarriers();

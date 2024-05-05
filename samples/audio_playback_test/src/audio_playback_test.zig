@@ -55,8 +55,8 @@ const DemoState = struct {
 };
 
 fn fillAudioBuffer(audio: *AudioContex) void {
-    while (@cmpxchgWeak(bool, &audio.is_locked, false, true, .Acquire, .Monotonic) != null) {}
-    defer @atomicStore(bool, &audio.is_locked, false, .Release);
+    while (@cmpxchgWeak(bool, &audio.is_locked, false, true, .acquire, .monotonic) != null) {}
+    defer @atomicStore(bool, &audio.is_locked, false, .release);
 
     var buffer_padding_in_frames: w32.UINT = 0;
     hrPanicOnFail(audio.client.GetCurrentPadding(&buffer_padding_in_frames));
@@ -266,33 +266,25 @@ fn init(allocator: std.mem.Allocator) !DemoState {
         };
         pso_desc.RTVFormats[0] = .R8G8B8A8_UNORM;
         pso_desc.NumRenderTargets = 1;
-        pso_desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xf;
         pso_desc.PrimitiveTopologyType = .LINE;
         pso_desc.DepthStencilState.DepthEnable = w32.FALSE;
         pso_desc.RasterizerState.AntialiasedLineEnable = w32.TRUE;
+        pso_desc.VS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/lines.vs.cso", null));
+        pso_desc.PS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/lines.ps.cso", null));
 
-        break :blk gctx.createGraphicsShaderPipeline(
-            arena_allocator,
-            &pso_desc,
-            content_dir ++ "shaders/lines.vs.cso",
-            content_dir ++ "shaders/lines.ps.cso",
-        );
+        break :blk gctx.createGraphicsShaderPipeline(&pso_desc);
     };
 
     const image_pso = blk: {
         var pso_desc = d3d12.GRAPHICS_PIPELINE_STATE_DESC.initDefault();
         pso_desc.RTVFormats[0] = .R8G8B8A8_UNORM;
         pso_desc.NumRenderTargets = 1;
-        pso_desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xf;
         pso_desc.PrimitiveTopologyType = .TRIANGLE;
         pso_desc.DepthStencilState.DepthEnable = w32.FALSE;
+        pso_desc.VS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/image.vs.cso", null));
+        pso_desc.PS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/image.ps.cso", null));
 
-        break :blk gctx.createGraphicsShaderPipeline(
-            arena_allocator,
-            &pso_desc,
-            content_dir ++ "shaders/image.vs.cso",
-            content_dir ++ "shaders/image.ps.cso",
-        );
+        break :blk gctx.createGraphicsShaderPipeline(&pso_desc);
     };
 
     const lines_buffer = gctx.createCommittedResource(
@@ -343,7 +335,7 @@ fn init(allocator: std.mem.Allocator) !DemoState {
 fn deinit(demo: *DemoState, allocator: std.mem.Allocator) void {
     demo.gctx.finishGpuCommands();
 
-    while (@cmpxchgWeak(bool, &demo.audio.is_locked, false, true, .Acquire, .Monotonic) != null) {}
+    while (@cmpxchgWeak(bool, &demo.audio.is_locked, false, true, .acquire, .monotonic) != null) {}
     _ = w32.TerminateThread(demo.audio.thread_handle.?, 0);
     _ = w32.CloseHandle(demo.audio.buffer_ready_event);
     _ = w32.CloseHandle(demo.audio.thread_handle.?);
@@ -374,8 +366,8 @@ fn draw(demo: *DemoState) void {
     gctx.flushResourceBarriers();
 
     {
-        while (@cmpxchgWeak(bool, &demo.audio.is_locked, false, true, .Acquire, .Monotonic) != null) {}
-        defer @atomicStore(bool, &demo.audio.is_locked, false, .Release);
+        while (@cmpxchgWeak(bool, &demo.audio.is_locked, false, true, .acquire, .monotonic) != null) {}
+        defer @atomicStore(bool, &demo.audio.is_locked, false, .release);
 
         const frame = demo.audio.current_frame_index;
 
@@ -465,7 +457,7 @@ pub fn main() !void {
         null,
     ).?;
     hrPanicOnFail(demo.audio.client.Start());
-    @atomicStore(bool, &demo.audio.is_locked, false, .Release);
+    @atomicStore(bool, &demo.audio.is_locked, false, .release);
 
     while (common.handleWindowEvents()) {
         update(&demo);

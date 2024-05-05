@@ -477,51 +477,40 @@ fn init(allocator: std.mem.Allocator) !DemoState {
         var pso_desc = d3d12.GRAPHICS_PIPELINE_STATE_DESC.initDefault();
         pso_desc.RTVFormats[0] = .R8G8B8A8_UNORM;
         pso_desc.NumRenderTargets = 1;
-        pso_desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xf;
         pso_desc.DSVFormat = .D32_FLOAT;
         pso_desc.DepthStencilState.DepthFunc = .LESS_EQUAL;
         pso_desc.PrimitiveTopologyType = .TRIANGLE;
+        pso_desc.VS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/rast_static_mesh.vs.cso"));
+        pso_desc.PS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/rast_static_mesh.ps.cso"));
 
-        break :blk gctx.createGraphicsShaderPipeline(
-            arena_allocator,
-            &pso_desc,
-            content_dir ++ "shaders/rast_static_mesh.vs.cso",
-            content_dir ++ "shaders/rast_static_mesh.ps.cso",
-        );
+        break :blk gctx.createGraphicsShaderPipeline(&pso_desc);
     };
 
     const z_pre_pass_pso = blk: {
         var pso_desc = d3d12.GRAPHICS_PIPELINE_STATE_DESC.initDefault();
         pso_desc.RTVFormats[0] = .UNKNOWN;
         pso_desc.NumRenderTargets = 0;
-        pso_desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0x0;
+        pso_desc.BlendState.RenderTarget[0].RenderTargetWriteMask = .{};
         pso_desc.DSVFormat = .D32_FLOAT;
         pso_desc.PrimitiveTopologyType = .TRIANGLE;
+        pso_desc.VS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/z_pre_pass.vs.cso"));
+        pso_desc.PS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/z_pre_pass.ps.cso"));
 
-        break :blk gctx.createGraphicsShaderPipeline(
-            arena_allocator,
-            &pso_desc,
-            content_dir ++ "shaders/z_pre_pass.vs.cso",
-            content_dir ++ "shaders/z_pre_pass.ps.cso",
-        );
+        break :blk gctx.createGraphicsShaderPipeline(&pso_desc);
     };
 
     const gen_shadow_rays_pso = blk: {
         var pso_desc = d3d12.GRAPHICS_PIPELINE_STATE_DESC.initDefault();
         pso_desc.RTVFormats[0] = .R32G32B32A32_FLOAT;
         pso_desc.NumRenderTargets = 1;
-        pso_desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xf;
         pso_desc.DSVFormat = .D32_FLOAT;
         pso_desc.DepthStencilState.DepthWriteMask = .ZERO;
         pso_desc.DepthStencilState.DepthFunc = .LESS_EQUAL;
         pso_desc.PrimitiveTopologyType = .TRIANGLE;
+        pso_desc.VS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/gen_shadow_rays.vs.cso"));
+        pso_desc.PS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/gen_shadow_rays.ps.cso"));
 
-        break :blk gctx.createGraphicsShaderPipeline(
-            arena_allocator,
-            &pso_desc,
-            content_dir ++ "shaders/gen_shadow_rays.vs.cso",
-            content_dir ++ "shaders/gen_shadow_rays.ps.cso",
-        );
+        break :blk gctx.createGraphicsShaderPipeline(&pso_desc);
     };
 
     // Create 'trace shadow rays' RT state object.

@@ -8,7 +8,8 @@ const d3d12 = zwin32.d3d12;
 const hrPanic = zwin32.hrPanic;
 const hrPanicOnFail = zwin32.hrPanicOnFail;
 const zd3d12 = @import("zd3d12");
-const c = @import("common.zig").c;
+const common = @import("common.zig");
+const c = common.c;
 
 font: zd3d12.ResourceHandle,
 font_srv: d3d12.CPU_DESCRIPTOR_HANDLE,
@@ -83,15 +84,11 @@ pub fn init(
         };
         pso_desc.RTVFormats[0] = .R8G8B8A8_UNORM;
         pso_desc.NumRenderTargets = 1;
-        pso_desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xf;
         pso_desc.PrimitiveTopologyType = .TRIANGLE;
         pso_desc.SampleDesc = .{ .Count = num_msaa_samples, .Quality = 0 };
-        break :blk gctx.createGraphicsShaderPipeline(
-            arena,
-            &pso_desc,
-            content_dir ++ "shaders/imgui.vs.cso",
-            content_dir ++ "shaders/imgui.ps.cso",
-        );
+        pso_desc.VS = d3d12.SHADER_BYTECODE.init(common.readContentDirFileAlloc(arena, content_dir, "shaders/imgui.vs.cso", null) catch unreachable);
+        pso_desc.PS = d3d12.SHADER_BYTECODE.init(common.readContentDirFileAlloc(arena, content_dir, "shaders/imgui.ps.cso", null) catch unreachable);
+        break :blk gctx.createGraphicsShaderPipeline(&pso_desc);
     };
     return GuiRenderer{
         .font = font,

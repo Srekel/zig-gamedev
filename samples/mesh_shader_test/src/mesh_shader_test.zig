@@ -277,17 +277,12 @@ fn init(allocator: std.mem.Allocator) !DemoState {
         pso_desc.RTVFormats[0] = .R8G8B8A8_UNORM;
         pso_desc.NumRenderTargets = 1;
         pso_desc.DSVFormat = .D32_FLOAT;
-        pso_desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xf;
         pso_desc.PrimitiveTopologyType = .TRIANGLE;
         pso_desc.SampleDesc = .{ .Count = 1, .Quality = 0 };
+        pso_desc.MS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/mesh_shader.ms.cso", null));
+        pso_desc.PS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/mesh_shader.ps.cso", null));
 
-        break :blk gctx.createMeshShaderPipeline(
-            arena_allocator,
-            &pso_desc,
-            null,
-            content_dir ++ "shaders/mesh_shader.ms.cso",
-            content_dir ++ "shaders/mesh_shader.ps.cso",
-        );
+        break :blk gctx.createMeshShaderPipeline(&pso_desc);
     };
 
     const vertex_shader_pso = blk: {
@@ -295,16 +290,12 @@ fn init(allocator: std.mem.Allocator) !DemoState {
         pso_desc.RTVFormats[0] = .R8G8B8A8_UNORM;
         pso_desc.NumRenderTargets = 1;
         pso_desc.DSVFormat = .D32_FLOAT;
-        pso_desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xf;
         pso_desc.PrimitiveTopologyType = .TRIANGLE;
         pso_desc.SampleDesc = .{ .Count = 1, .Quality = 0 };
+        pso_desc.VS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/vertex_shader.vs.cso", null));
+        pso_desc.PS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/vertex_shader.ps.cso", null));
 
-        break :blk gctx.createGraphicsShaderPipeline(
-            arena_allocator,
-            &pso_desc,
-            content_dir ++ "shaders/vertex_shader.vs.cso",
-            content_dir ++ "shaders/vertex_shader.ps.cso",
-        );
+        break :blk gctx.createGraphicsShaderPipeline(&pso_desc);
     };
 
     const vertex_shader_fixed_pso = blk: {
@@ -320,17 +311,13 @@ fn init(allocator: std.mem.Allocator) !DemoState {
         };
         pso_desc.RTVFormats[0] = .R8G8B8A8_UNORM;
         pso_desc.NumRenderTargets = 1;
-        pso_desc.BlendState.RenderTarget[0].RenderTargetWriteMask = 0xf;
         pso_desc.PrimitiveTopologyType = .TRIANGLE;
         pso_desc.DSVFormat = .D32_FLOAT;
         pso_desc.SampleDesc = .{ .Count = 1, .Quality = 0 };
+        pso_desc.VS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/vertex_shader_fixed.vs.cso", null));
+        pso_desc.PS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/vertex_shader_fixed.ps.cso", null));
 
-        break :blk gctx.createGraphicsShaderPipeline(
-            arena_allocator,
-            &pso_desc,
-            content_dir ++ "shaders/vertex_shader_fixed.vs.cso",
-            content_dir ++ "shaders/vertex_shader_fixed.ps.cso",
-        );
+        break :blk gctx.createGraphicsShaderPipeline(&pso_desc);
     };
 
     zmesh.init(arena_allocator);

@@ -273,12 +273,57 @@ test "zflecs.helloworld" {
     ecs.TAG(world, Apples);
 
     {
-        var system_desc = ecs.system_desc_t{};
-        system_desc.callback = move;
-        system_desc.query.filter.terms[0] = .{ .id = ecs.id(Position) };
-        system_desc.query.filter.terms[1] = .{ .id = ecs.id(Velocity) };
-        ecs.SYSTEM(world, "move system", ecs.OnUpdate, &system_desc);
+        ecs.ADD_SYSTEM_WITH_FILTERS(world, "move system", ecs.OnUpdate, move, &.{
+            .{ .id = ecs.id(Position) },
+            .{ .id = ecs.id(Velocity) },
+        });
     }
+
+    const bob = ecs.new_entity(world, "Bob");
+    _ = ecs.set(world, bob, Position, .{ .x = 0, .y = 0 });
+    _ = ecs.set(world, bob, Velocity, .{ .x = 1, .y = 2 });
+    ecs.add_pair(world, bob, ecs.id(Eats), ecs.id(Apples));
+
+    _ = ecs.progress(world, 0);
+    _ = ecs.progress(world, 0);
+
+    const p = ecs.get(world, bob, Position).?;
+    print("Bob's position is ({d}, {d})\n", .{ p.x, p.y });
+}
+
+fn move_system(positions: []Position, velocities: []const Velocity) void {
+    for (positions, velocities) |*p, v| {
+        p.x += v.x;
+        p.y += v.y;
+    }
+}
+
+//Optionally, systems can receive the components iterator (usually not necessary)
+fn move_system_with_it(it: *ecs.iter_t, positions: []Position, velocities: []const Velocity) void {
+    const type_str = ecs.table_str(it.world, it.table).?;
+    print("Move entities with [{s}]\n", .{type_str});
+    defer ecs.os.free(type_str);
+
+    for (positions, velocities) |*p, v| {
+        p.x += v.x;
+        p.y += v.y;
+    }
+}
+
+test "zflecs.helloworld_systemcomptime" {
+    print("\n", .{});
+
+    const world = ecs.init();
+    defer _ = ecs.fini(world);
+
+    ecs.COMPONENT(world, Position);
+    ecs.COMPONENT(world, Velocity);
+
+    ecs.TAG(world, Eats);
+    ecs.TAG(world, Apples);
+
+    ecs.ADD_SYSTEM(world, "move system", ecs.OnUpdate, move_system);
+    ecs.ADD_SYSTEM(world, "move system with iterator", ecs.OnUpdate, move_system_with_it);
 
     const bob = ecs.new_entity(world, "Bob");
     _ = ecs.set(world, bob, Position, .{ .x = 0, .y = 0 });
@@ -386,4 +431,50 @@ test "zflecs.pairs.delete-children" {
         }
     }
     try expectEqual(@as(u8, 0), found);
+}
+
+test "zflecs.struct-dtor-hook" {
+    const world = ecs.init();
+    defer _ = ecs.fini(world);
+
+    const Chat = struct {
+        messages: std.ArrayList([]const u8),
+
+        pub fn init(allocator: std.mem.Allocator) @This() {
+            return @This(){
+                .messages = std.ArrayList([]const u8).init(allocator),
+            };
+        }
+
+        pub fn dtor(self: @This()) void {
+            self.messages.deinit();
+        }
+    };
+
+    ecs.COMPONENT(world, Chat);
+    {
+        var system_desc = ecs.system_desc_t{};
+        system_desc.callback = struct {
+            pub fn chatSystem(it: *ecs.iter_t) callconv(.C) void {
+                const chat_components = ecs.field(it, Chat, 1).?;
+                for (0..it.count()) |i| {
+                    chat_components[i].messages.append("some words hi") catch @panic("whomp");
+                }
+            }
+        }.chatSystem;
+        system_desc.query.filter.terms[0] = .{ .id = ecs.id(Chat) };
+        ecs.SYSTEM(world, "Chat system", ecs.OnUpdate, &system_desc);
+    }
+
+    const chat_entity = ecs.new_entity(world, "Chat entity");
+    _ = ecs.set(world, chat_entity, Chat, Chat.init(std.testing.allocator));
+
+    _ = ecs.progress(world, 0);
+
+    const chat_component = ecs.get(world, chat_entity, Chat).?;
+    try std.testing.expect(chat_component.messages.items.len == 1);
+
+    // This test fails if the ".hooks = .{ .dtor = ... }" from COMPONENT is
+    // commented out since the cleanup is never called to free the ArrayList
+    // memory.
 }

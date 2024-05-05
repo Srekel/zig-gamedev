@@ -231,6 +231,11 @@ pub fn build(b: *std.Build) void {
             });
             imgui.linkSystemLibrary("dxgi");
             imgui.linkSystemLibrary("dwmapi");
+            switch (target.result.abi) {
+                .msvc => imgui.linkSystemLibrary("Gdi32"),
+                .gnu => imgui.linkSystemLibrary("gdi32"),
+                else => {},
+            }
         },
         .glfw => {
             const zglfw = b.dependency("zglfw", .{});
