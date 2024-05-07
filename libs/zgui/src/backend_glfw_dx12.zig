@@ -2,6 +2,9 @@ const gui = @import("gui.zig");
 const backend_glfw = @import("backend_glfw.zig");
 const backend_dx12 = @import("backend_dx12.zig");
 
+pub const D3D12_CPU_DESCRIPTOR_HANDLE = backend_dx12.D3D12_CPU_DESCRIPTOR_HANDLE;
+pub const D3D12_GPU_DESCRIPTOR_HANDLE = backend_dx12.D3D12_GPU_DESCRIPTOR_HANDLE;
+
 pub fn init(
     window: *const anyopaque, // zglfw.Window
     device: *const anyopaque, // ID3D12Device
