@@ -211,8 +211,8 @@ fn init(allocator: std.mem.Allocator) !DemoState {
         pso_desc.NumRenderTargets = 1;
         pso_desc.DSVFormat = .D32_FLOAT;
         pso_desc.PrimitiveTopologyType = .LINE;
-        pso_desc.VS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/lines.vs.cso", null));
-        pso_desc.PS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/lines.ps.cso", null));
+        pso_desc.VS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/audio_experiments.vs.cso", null));
+        pso_desc.PS = d3d12.SHADER_BYTECODE.init(try common.readContentDirFileAlloc(arena_allocator, content_dir, "shaders/audio_experiments.ps.cso", null));
 
         break :blk gctx.createGraphicsShaderPipeline(&pso_desc);
     };
@@ -424,7 +424,7 @@ fn draw(demo: *DemoState) void {
 
     gctx.cmdlist.OMSetRenderTargets(
         1,
-        &[_]d3d12.CPU_DESCRIPTOR_HANDLE{back_buffer.descriptor_handle},
+        &.{back_buffer.descriptor_handle},
         w32.TRUE,
         &demo.depth_texture_dsv,
     );
@@ -488,11 +488,13 @@ fn draw(demo: *DemoState) void {
                 };
             }
 
-            gctx.cmdlist.IASetVertexBuffers(0, 1, &[_]d3d12.VERTEX_BUFFER_VIEW{.{
-                .BufferLocation = mem.gpu_base,
-                .SizeInBytes = num_vertices * @sizeOf(Pso_Vertex),
-                .StrideInBytes = @sizeOf(Pso_Vertex),
-            }});
+            gctx.cmdlist.IASetVertexBuffers(0, 1, &.{
+                .{
+                    .BufferLocation = mem.gpu_base,
+                    .SizeInBytes = num_vertices * @sizeOf(Pso_Vertex),
+                    .StrideInBytes = @sizeOf(Pso_Vertex),
+                },
+            });
             gctx.cmdlist.DrawInstanced(num_vertices, 1, 0, 0);
         }
     }

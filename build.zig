@@ -1,9 +1,14 @@
 const builtin = @import("builtin");
 const std = @import("std");
 
-pub const min_zig_version = std.SemanticVersion{ .major = 0, .minor = 13, .patch = 0, .pre = "" };
+pub const min_zig_version = std.SemanticVersion{
+    .major = 0,
+    .minor = 13,
+    .patch = 0,
+    .pre = "dev.351",
+};
 
-pub fn build(b: *std.Build) !void {
+pub fn build(b: *std.Build) void {
     ensureZigVersion() catch return;
 
     if (checkGitLfsContent() == false) {
@@ -65,9 +70,9 @@ pub fn build(b: *std.Build) !void {
     // Tests
     //
     const test_step = b.step("test", "Run all tests");
-    try tests(b, target, optimize, test_step);
+    tests(b, target, optimize, test_step);
     if (builtin.os.tag == .windows) {
-        try testsWindows(b, target, optimize, test_step);
+        testsWindows(b, target, optimize, test_step);
     }
 
     //
@@ -104,6 +109,8 @@ const samples_windows_linux = struct {
     pub const minimal_glfw_d3d12 = @import("samples/minimal_glfw_d3d12/build.zig");
     pub const minimal_zgui_glfw_d3d12 = @import("samples/minimal_zgui_glfw_d3d12/build.zig");
     pub const minimal_zgui_win32_d3d12 = @import("samples/minimal_zgui_win32_d3d12/build.zig");
+    pub const openvr_test = @import("samples/openvr_test/build.zig");
+    pub const simple_openvr = @import("samples/simple_openvr/build.zig");
     pub const rasterization = @import("samples/rasterization/build.zig");
     // TODO: get simple raytracer working again
     //pub const simple_raytracer = @import("samples/simple_raytracer/build.zig");
@@ -162,7 +169,7 @@ fn tests(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     test_step: *std.Build.Step,
-) !void {
+) void {
     // TODO: Renable randomly failing sdl2_ttf test on windows
     if (target.result.os.tag != .windows) {
         const zaudio = b.dependency("zaudio", .{
@@ -243,19 +250,19 @@ fn tests(
 
     const sdl2_tests = b.addRunArtifact(zsdl.artifact("sdl2-tests"));
     if (target.result.os.tag == .windows) {
-        sdl2_tests.setCwd(.{ .path = b.getInstallPath(.bin, "") });
+        sdl2_tests.setCwd(.{ .cwd_relative = b.getInstallPath(.bin, "") });
     }
     test_step.dependOn(&sdl2_tests.step);
-    try @import("zsdl").install_sdl2(&sdl2_tests.step, target.result, .bin, "libs/zsdl");
+    @import("zsdl").install_sdl2(&sdl2_tests.step, target.result, .bin);
 
     // TODO: Renable randomly failing sdl2_ttf test on windows
     if (target.result.os.tag != .windows) {
         const sdl2_ttf_tests = b.addRunArtifact(zsdl.artifact("sdl2_ttf-tests"));
         if (target.result.os.tag == .windows) {
-            sdl2_ttf_tests.setCwd(.{ .path = b.getInstallPath(.bin, "") });
+            sdl2_ttf_tests.setCwd(.{ .cwd_relative = b.getInstallPath(.bin, "") });
         }
         test_step.dependOn(&sdl2_ttf_tests.step);
-        try @import("zsdl").install_sdl2_ttf(&sdl2_tests.step, target.result, .bin, "libs/zsdl");
+        @import("zsdl").install_sdl2_ttf(&sdl2_tests.step, target.result, .bin);
     }
 
     // TODO(hazeycode): SDL3 tests
@@ -284,7 +291,7 @@ fn testsWindows(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     test_step: *std.Build.Step,
-) !void {
+) void {
     const zd3d12 = b.dependency("zd3d12", .{
         .target = target,
         .optimize = optimize,
@@ -308,6 +315,16 @@ fn testsWindows(
         .optimize = optimize,
     });
     test_step.dependOn(&b.addRunArtifact(zxaudio2.artifact("zxaudio2-tests")).step);
+
+    const zopenvr = b.dependency("zopenvr", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const openvr_tests = b.addRunArtifact(zopenvr.artifact("openvr-tests"));
+    openvr_tests.setCwd(.{ .cwd_relative = b.getInstallPath(.bin, "") });
+
+    test_step.dependOn(&openvr_tests.step);
+    @import("zopenvr").installOpenVR(&openvr_tests.step, target.result, .bin);
 }
 
 pub const Options = struct {
@@ -320,6 +337,7 @@ pub const Options = struct {
     zpix_enable: bool,
 };
 
+// TODO: Delete this once Zig checks minimum_zig_version in build.zig.zon
 fn ensureZigVersion() !void {
     var installed_ver = builtin.zig_version;
     installed_ver.build = null;
@@ -357,10 +375,9 @@ fn ensureGit(allocator: std.mem.Allocator) !void {
         }
     }).impl;
     const argv = &[_][]const u8{ "git", "version" };
-    const result = std.ChildProcess.run(.{
+    const result = std.process.Child.run(.{
         .allocator = allocator,
         .argv = argv,
-        .cwd = thisDir(),
     }) catch { // e.g. FileNotFound
         printErrorMsg();
         return error.GitNotFound;
@@ -391,10 +408,9 @@ fn ensureGitLfs(allocator: std.mem.Allocator, cmd: []const u8) !void {
         }
     }).impl;
     const argv = &[_][]const u8{ "git", "lfs", cmd };
-    const result = std.ChildProcess.run(.{
+    const result = std.process.Child.run(.{
         .allocator = allocator,
         .argv = argv,
-        .cwd = thisDir(),
     }) catch { // e.g. FileNotFound
         printNoGitLfs();
         return error.GitLfsNotFound;
@@ -410,21 +426,13 @@ fn ensureGitLfs(allocator: std.mem.Allocator, cmd: []const u8) !void {
 }
 
 fn checkGitLfsContent() bool {
-    const file = std.fs.openFileAbsolute(thisDir() ++ "/.lfs-content-token", .{}) catch {
-        return false;
-    };
-    defer file.close();
     const expected_contents =
         \\DO NOT EDIT OR DELETE
         \\This file is used to check if Git LFS content has been downloaded
     ;
     var buf: [expected_contents.len]u8 = undefined;
-    _ = file.readAll(&buf) catch {
+    _ = std.fs.cwd().readFile(".lfs-content-token", &buf) catch {
         return false;
     };
     return std.mem.eql(u8, expected_contents, &buf);
-}
-
-inline fn thisDir() []const u8 {
-    return comptime std.fs.path.dirname(@src().file) orelse ".";
 }

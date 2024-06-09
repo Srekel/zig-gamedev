@@ -42,11 +42,12 @@
 !/libs/system-sdk/**
 !/libs/zgpu/libs/**
 !/libs/zsdl/libs/**
+!/libs/zopenvr/libs/**
 !/libs/zwin32/bin/x64/*
 
 # Ignore some special directories
-zig-cache
-zig-out
+*zig-cache
+*zig-out
 backup
 
 # Ignore some special system files

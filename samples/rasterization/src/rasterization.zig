@@ -266,29 +266,24 @@ fn init(allocator: std.mem.Allocator) !DemoState {
         null,
     ) catch |err| hrPanic(err);
 
-    const pixel_buffer_srv = gctx.allocateCpuDescriptors(.CBV_SRV_UAV, 1);
-    const pixel_buffer_uav = gctx.allocateCpuDescriptors(.CBV_SRV_UAV, 1);
-
-    gctx.device.CreateShaderResourceView(
-        gctx.lookupResource(pixel_buffer).?,
+    const pixel_buffer_srv = gctx.allocShaderResourceView(
+        pixel_buffer,
         &d3d12.SHADER_RESOURCE_VIEW_DESC.initStructuredBuffer(
             1, // FirstElement
             gctx.viewport_width * gctx.viewport_height, // NumElements
             @sizeOf(Pso_Pixel), // StructureByteStride
         ),
-        pixel_buffer_srv,
     );
 
-    gctx.device.CreateUnorderedAccessView(
-        gctx.lookupResource(pixel_buffer).?,
-        gctx.lookupResource(pixel_buffer).?,
+    const pixel_buffer_uav = gctx.allocUnorderedAccessView(
+        pixel_buffer,
+        pixel_buffer,
         &d3d12.UNORDERED_ACCESS_VIEW_DESC.initStructuredBuffer(
             1,
             gctx.viewport_width * gctx.viewport_height,
             @sizeOf(Pso_Pixel),
             0, // CounterOffsetInBytes
         ),
-        pixel_buffer_uav,
     );
 
     const pixel_texture = gctx.createCommittedResource(
@@ -303,12 +298,10 @@ fn init(allocator: std.mem.Allocator) !DemoState {
         &d3d12.CLEAR_VALUE.initColor(.R8G8B8A8_UNORM, &.{ 0.2, 0.4, 0.8, 1.0 }),
     ) catch |err| hrPanic(err);
 
-    const pixel_texture_uav = gctx.allocateCpuDescriptors(.CBV_SRV_UAV, 1);
-    gctx.device.CreateUnorderedAccessView(
-        gctx.lookupResource(pixel_texture).?,
+    const pixel_texture_uav = gctx.allocUnorderedAccessView(
+        pixel_texture,
         null,
         null,
-        pixel_texture_uav,
     );
 
     const pixel_texture_rtv = gctx.allocateCpuDescriptors(.RTV, 1);
@@ -341,6 +334,7 @@ fn init(allocator: std.mem.Allocator) !DemoState {
         ) catch |err| hrPanic(err),
     };
 
+    // allocate to ResourceDescriptorHeap[0..3]
     for (mesh_textures) |texture| {
         const descriptor = gctx.allocatePersistentGpuDescriptors(1);
         gctx.device.CreateShaderResourceView(gctx.lookupResource(texture).?, null, descriptor.cpu_handle);
@@ -563,11 +557,13 @@ fn draw(demo: *DemoState) void {
 
     // Set input assembler (IA) state.
     gctx.cmdlist.IASetPrimitiveTopology(.TRIANGLELIST);
-    gctx.cmdlist.IASetVertexBuffers(0, 1, &[_]d3d12.VERTEX_BUFFER_VIEW{.{
-        .BufferLocation = gctx.lookupResource(demo.vertex_buffer).?.GetGPUVirtualAddress(),
-        .SizeInBytes = demo.mesh_num_vertices * @sizeOf(Pso_Vertex),
-        .StrideInBytes = @sizeOf(Pso_Vertex),
-    }});
+    gctx.cmdlist.IASetVertexBuffers(0, 1, &.{
+        .{
+            .BufferLocation = gctx.lookupResource(demo.vertex_buffer).?.GetGPUVirtualAddress(),
+            .SizeInBytes = demo.mesh_num_vertices * @sizeOf(Pso_Vertex),
+            .StrideInBytes = @sizeOf(Pso_Vertex),
+        },
+    });
     gctx.cmdlist.IASetIndexBuffer(&.{
         .BufferLocation = gctx.lookupResource(demo.index_buffer).?.GetGPUVirtualAddress(),
         .SizeInBytes = demo.mesh_num_indices * @sizeOf(u32),
@@ -607,7 +603,7 @@ fn draw(demo: *DemoState) void {
 
         gctx.cmdlist.OMSetRenderTargets(
             1,
-            &[_]d3d12.CPU_DESCRIPTOR_HANDLE{demo.pixel_texture_rtv},
+            &.{demo.pixel_texture_rtv},
             w32.TRUE,
             &demo.depth_texture_dsv,
         );
@@ -661,7 +657,7 @@ fn draw(demo: *DemoState) void {
             gctx.cmdlist.Dispatch(gctx.viewport_width * gctx.viewport_height / compute_group_size, 1, 1);
             gctx.cmdlist.ResourceBarrier(
                 1,
-                &[_]d3d12.RESOURCE_BARRIER{
+                &.{
                     d3d12.RESOURCE_BARRIER.initUav(gctx.lookupResource(demo.pixel_buffer).?),
                 },
             );
@@ -730,14 +726,10 @@ fn draw(demo: *DemoState) void {
         // Draw pixels to the pixel texture.
         //
         gctx.setCurrentPipeline(demo.draw_pixels_pso);
-        gctx.cmdlist.SetComputeRootDescriptorTable(
-            0,
-            blk: {
-                const table = gctx.copyDescriptorsToGpuHeap(1, demo.pixel_buffer_srv);
-                _ = gctx.copyDescriptorsToGpuHeap(1, demo.pixel_texture_uav);
-                break :blk table;
-            },
-        );
+        gctx.setComputeRootDescriptorTable(0, &.{
+            demo.pixel_buffer_srv,
+            demo.pixel_texture_uav,
+        });
         gctx.cmdlist.Dispatch(demo.num_pixel_groups, 1, 1);
     }
 
@@ -760,7 +752,7 @@ fn draw(demo: *DemoState) void {
     // Set back buffer as a render target (for UI and Direct2D).
     gctx.cmdlist.OMSetRenderTargets(
         1,
-        &[_]d3d12.CPU_DESCRIPTOR_HANDLE{back_buffer.descriptor_handle},
+        &.{back_buffer.descriptor_handle},
         w32.TRUE,
         null,
     );

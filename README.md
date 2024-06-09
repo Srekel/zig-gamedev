@@ -24,16 +24,16 @@ Note: If using Git then you will need [Git LFS](https://git-lfs.github.com/) to 
 
 ### Get Zig
 
-Our [main](https://github.com/zig-gamedev/zig-gamedev/tree/main) branch is currenly tracking Zig **0.13.0-dev.46+3648d7df1**.
+Our [main](https://github.com/zig-gamedev/zig-gamedev/tree/main) branch is currenly tracking Zig **0.13.0-dev.351+64ef45eb0**.
 
 [zigup](https://github.com/marler8997/zigup) is recommended for managing compiler versions. Alternatively, you can download and install manually using the links below:
 
 | OS/Arch         | Download link               |
 | --------------- | --------------------------- |
-| Windows x86_64  | [zig-windows-x86_64-0.13.0-dev.46+3648d7df1.zip](https://ziglang.org/builds/zig-windows-x86_64-0.13.0-dev.46+3648d7df1.zip) |
-| Linux x86_64    | [zig-linux-x86_64-0.13.0-dev.46+3648d7df1.tar.xz](https://ziglang.org/builds/zig-linux-x86_64-0.13.0-dev.46+3648d7df1.tar.xz) |
-| macOS x86_64    | [zig-macos-x86_64-0.13.0-dev.46+3648d7df1.tar.xz](https://ziglang.org/builds/zig-macos-x86_64-0.13.0-dev.46+3648d7df1.tar.xz) |
-| macOS aarch64   | [zig-macos-aarch64-0.13.0-dev.46+3648d7df1.tar.xz](https://ziglang.org/builds/zig-macos-aarch64-0.13.0-dev.46+3648d7df1.tar.xz) |
+| Windows x86_64  | [zig-windows-x86_64-0.13.0-dev.351+64ef45eb0.zip](https://ziglang.org/builds/zig-windows-x86_64-0.13.0-dev.351+64ef45eb0.zip) |
+| Linux x86_64    | [zig-linux-x86_64-0.13.0-dev.351+64ef45eb0.tar.xz](https://ziglang.org/builds/zig-linux-x86_64-0.13.0-dev.351+64ef45eb0.tar.xz) |
+| macOS x86_64    | [zig-macos-x86_64-0.13.0-dev.351+64ef45eb0.tar.xz](https://ziglang.org/builds/zig-macos-x86_64-0.13.0-dev.351+64ef45eb0.tar.xz) |
+| macOS aarch64   | [zig-macos-aarch64-0.13.0-dev.351+64ef45eb0.tar.xz](https://ziglang.org/builds/zig-macos-aarch64-0.13.0-dev.351+64ef45eb0.tar.xz) |
 
 If you need to use a more recent version of Zig, you can try our [unstable](https://github.com/zig-gamedev/zig-gamedev/tree/unstable) branch. But this is not generally recommended.
 
@@ -99,6 +99,7 @@ Option to download packages using Zig Package Manager **coming soon!**
 | **[zmesh](libs/zmesh)**       | Loading, generating, processing and optimizing triangle meshes                                                                             |
 | **[znoise](libs/znoise)**     | Build package & bindings for [FastNoiseLite](https://github.com/Auburn/FastNoiseLite)                                                      |
 | **[zopengl](libs/zopengl)**   | OpenGL loader (supports 4.2 Core Profile and ES 2.0 Profile)                                                                               |
+| **[zopenvr](libs/zopenvr)**   | Bindings for [OpenVR](https://github.com/ValveSoftware/openvr)                                                                             |
 | **[zphysics](libs/zphysics)** | Build package, [C API](libs/zphysics/libs/JoltC) and bindings for [Jolt Physics](https://github.com/jrouwe/JoltPhysics)                    |
 | **[zpix](libs/zpix)**         | Support for GPU profiling with PIX for Windows                                                           |
 | **[zpool](libs/zpool)**       | Generic pool & handle implementation                                                                     |

@@ -1,6 +1,7 @@
 .{
     .name = "zig-gamedev",
     .version = "0.6.0",
+    .minimum_zig_version = "0.13.0-dev.351+64ef45eb0",
     .paths = .{
         "build.zig",
         "build.zig.zon",
@@ -24,6 +25,7 @@
         .zmesh = .{ .path = "libs/zmesh" },
         .znoise = .{ .path = "libs/znoise" },
         .zopengl = .{ .path = "libs/zopengl" },
+        .zopenvr = .{ .path = "libs/zopenvr" },
         .zphysics = .{ .path = "libs/zphysics" },
         .zpix = .{ .path = "libs/zpix" },
         .zpool = .{ .path = "libs/zpool" },

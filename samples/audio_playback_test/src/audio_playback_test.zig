@@ -303,8 +303,7 @@ fn init(allocator: std.mem.Allocator) !DemoState {
         content_dir ++ "genart_008b.png",
         .{ .num_mip_levels = 1 },
     ) catch |err| hrPanic(err);
-    const image_srv = gctx.allocateCpuDescriptors(.CBV_SRV_UAV, 1);
-    gctx.device.CreateShaderResourceView(gctx.lookupResource(image).?, null, image_srv);
+    const image_srv = gctx.allocShaderResourceView(image, null);
     gctx.addTransitionBarrier(image, .{ .PIXEL_SHADER_RESOURCE = true });
 
     gctx.endFrame();
@@ -401,7 +400,7 @@ fn draw(demo: *DemoState) void {
 
     gctx.cmdlist.OMSetRenderTargets(
         1,
-        &[_]d3d12.CPU_DESCRIPTOR_HANDLE{back_buffer.descriptor_handle},
+        &.{back_buffer.descriptor_handle},
         w32.TRUE,
         null,
     );
@@ -421,11 +420,13 @@ fn draw(demo: *DemoState) void {
     // Draw audio stream samples.
     gctx.setCurrentPipeline(demo.lines_pso);
     gctx.cmdlist.IASetPrimitiveTopology(.LINESTRIP);
-    gctx.cmdlist.IASetVertexBuffers(0, 1, &[_]d3d12.VERTEX_BUFFER_VIEW{.{
-        .BufferLocation = gctx.lookupResource(demo.lines_buffer).?.GetGPUVirtualAddress(),
-        .SizeInBytes = num_vis_samples * @sizeOf(Vec2),
-        .StrideInBytes = @sizeOf(Vec2),
-    }});
+    gctx.cmdlist.IASetVertexBuffers(0, 1, &.{
+        .{
+            .BufferLocation = gctx.lookupResource(demo.lines_buffer).?.GetGPUVirtualAddress(),
+            .SizeInBytes = num_vis_samples * @sizeOf(Vec2),
+            .StrideInBytes = @sizeOf(Vec2),
+        },
+    });
     gctx.cmdlist.DrawInstanced(num_vis_samples, 1, 0, 0);
 
     demo.guir.draw(gctx);

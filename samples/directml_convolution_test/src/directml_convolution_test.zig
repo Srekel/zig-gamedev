@@ -127,8 +127,8 @@ fn init(allocator: std.mem.Allocator) !DemoState {
             .DataType = .FLOAT16,
             .Flags = .{},
             .DimensionCount = 4,
-            .Sizes = &[_]u32{ 1, 1, image_size, image_size },
-            .Strides = &[_]u32{ image_size * image_size, image_size, image_size, 1 },
+            .Sizes = &.{ 1, 1, image_size, image_size },
+            .Strides = &.{ image_size * image_size, image_size, image_size, 1 },
             .TotalTensorSizeInBytes = image_size * image_size * @sizeOf(f16),
             .GuaranteedBaseOffsetAlignment = 256,
         },
@@ -140,8 +140,8 @@ fn init(allocator: std.mem.Allocator) !DemoState {
             .DataType = .FLOAT16,
             .Flags = .{},
             .DimensionCount = 4,
-            .Sizes = &[_]u32{ 1, 1, image_size - 2, image_size - 2 },
-            .Strides = &[_]u32{ image_size * image_size, image_size, image_size, 1 },
+            .Sizes = &.{ 1, 1, image_size - 2, image_size - 2 },
+            .Strides = &.{ image_size * image_size, image_size, image_size, 1 },
             .TotalTensorSizeInBytes = image_size * image_size * @sizeOf(f16),
             .GuaranteedBaseOffsetAlignment = 256,
         },
@@ -153,7 +153,7 @@ fn init(allocator: std.mem.Allocator) !DemoState {
             .DataType = .FLOAT16,
             .Flags = .{},
             .DimensionCount = 4,
-            .Sizes = &[_]u32{ 1, 1, 3, 3 },
+            .Sizes = &.{ 1, 1, 3, 3 },
             .Strides = null,
             .TotalTensorSizeInBytes = std.mem.alignForward(
                 w32.UINT64,
@@ -175,11 +175,11 @@ fn init(allocator: std.mem.Allocator) !DemoState {
                 .Mode = .CONVOLUTION,
                 .Direction = .FORWARD,
                 .DimensionCount = 2,
-                .Strides = &[_]u32{ 1, 1 },
-                .Dilations = &[_]u32{ 1, 1 },
-                .StartPadding = &[_]u32{ 0, 0 },
-                .EndPadding = &[_]u32{ 0, 0 },
-                .OutputPadding = &[_]u32{ 0, 0 },
+                .Strides = &.{ 1, 1 },
+                .Dilations = &.{ 1, 1 },
+                .StartPadding = &.{ 0, 0 },
+                .EndPadding = &.{ 0, 0 },
+                .OutputPadding = &.{ 0, 0 },
                 .GroupCount = 1,
                 .FusedActivation = null,
             },
@@ -258,19 +258,15 @@ fn init(allocator: std.mem.Allocator) !DemoState {
         null,
     ) catch |err| hrPanic(err);
 
-    const input_buffer_srv = gctx.allocateCpuDescriptors(.CBV_SRV_UAV, 1);
-    gctx.device.CreateShaderResourceView(
-        gctx.lookupResource(input_buffer).?,
+    const input_buffer_srv = gctx.allocShaderResourceView(
+        input_buffer,
         &d3d12.SHADER_RESOURCE_VIEW_DESC.initTypedBuffer(.R16_FLOAT, 0, image_size * image_size),
-        input_buffer_srv,
     );
 
-    const input_buffer_uav = gctx.allocateCpuDescriptors(.CBV_SRV_UAV, 1);
-    gctx.device.CreateUnorderedAccessView(
-        gctx.lookupResource(input_buffer).?,
+    const input_buffer_uav = gctx.allocUnorderedAccessView(
+        input_buffer,
         null,
         &d3d12.UNORDERED_ACCESS_VIEW_DESC.initTypedBuffer(.R16_FLOAT, 0, image_size * image_size, 0),
-        input_buffer_uav,
     );
 
     const filter_buffer = gctx.createCommittedResource(
@@ -299,11 +295,9 @@ fn init(allocator: std.mem.Allocator) !DemoState {
         null,
     ) catch |err| hrPanic(err);
 
-    const output_buffer_srv = gctx.allocateCpuDescriptors(.CBV_SRV_UAV, 1);
-    gctx.device.CreateShaderResourceView(
-        gctx.lookupResource(output_buffer).?,
+    const output_buffer_srv = gctx.allocShaderResourceView(
+        output_buffer,
         &d3d12.SHADER_RESOURCE_VIEW_DESC.initTypedBuffer(.R16_FLOAT, 0, image_size * image_size),
-        output_buffer_srv,
     );
 
     const dml_cmd_recorder = blk: {
@@ -332,21 +326,18 @@ fn init(allocator: std.mem.Allocator) !DemoState {
         },
     ) catch |err| hrPanic(err);
 
-    const image_texture_srv = gctx.allocateCpuDescriptors(.CBV_SRV_UAV, 1);
-    const image_texture_uav = gctx.allocateCpuDescriptors(.CBV_SRV_UAV, 1);
+    const image_texture_srv = gctx.allocShaderResourceView(image_texture, null);
 
-    gctx.device.CreateShaderResourceView(gctx.lookupResource(image_texture).?, null, image_texture_srv);
-    gctx.device.CreateUnorderedAccessView(gctx.lookupResource(image_texture).?, null, null, image_texture_uav);
+    const image_texture_uav = gctx.allocUnorderedAccessView(image_texture, null, null);
 
     gctx.addTransitionBarrier(image_texture, .{ .NON_PIXEL_SHADER_RESOURCE = true });
     gctx.addTransitionBarrier(input_buffer, .{ .UNORDERED_ACCESS = true });
     gctx.flushResourceBarriers();
 
     gctx.setCurrentPipeline(texture_to_buffer_pso);
-    gctx.cmdlist.SetComputeRootDescriptorTable(0, blk: {
-        const table = gctx.copyDescriptorsToGpuHeap(1, image_texture_srv);
-        _ = gctx.copyDescriptorsToGpuHeap(1, input_buffer_uav);
-        break :blk table;
+    gctx.setComputeRootDescriptorTable(0, &.{
+        image_texture_srv,
+        input_buffer_uav,
     });
     gctx.cmdlist.Dispatch((image_size + 7) / 8, (image_size + 7) / 8, 1);
 
@@ -414,7 +405,7 @@ fn init(allocator: std.mem.Allocator) !DemoState {
         };
         offset += conv_info.PersistentResourceSize;
 
-        init_dtbl.BindOutputs(1, &[_]dml.BINDING_DESC{binding0});
+        init_dtbl.BindOutputs(1, &.{binding0});
     }
 
     dml_cmd_recorder.RecordDispatch(
@@ -507,7 +498,7 @@ fn dispatchConvOperator(demo: *DemoState) void {
     }
 
     // Bind input buffers.
-    demo.conv_op_state.dtbl.BindInputs(3, &[_]dml.BINDING_DESC{
+    demo.conv_op_state.dtbl.BindInputs(3, &.{
         .{ // InputTensor
             .Type = .BUFFER,
             .Desc = &dml.BUFFER_BINDING{
@@ -531,7 +522,7 @@ fn dispatchConvOperator(demo: *DemoState) void {
     });
 
     // Bind output buffer.
-    demo.conv_op_state.dtbl.BindOutputs(1, &[_]dml.BINDING_DESC{.{
+    demo.conv_op_state.dtbl.BindOutputs(1, &.{.{
         .Type = .BUFFER,
         .Desc = &dml.BUFFER_BINDING{
             .Buffer = gctx.lookupResource(demo.output_buffer).?,
@@ -551,7 +542,7 @@ fn dispatchBarriers(demo: *DemoState) void {
     var gctx = &demo.gctx;
     gctx.cmdlist.ResourceBarrier(
         2,
-        &[_]d3d12.RESOURCE_BARRIER{
+        &.{
             d3d12.RESOURCE_BARRIER.initUav(gctx.lookupResource(demo.input_buffer).?),
             d3d12.RESOURCE_BARRIER.initUav(gctx.lookupResource(demo.output_buffer).?),
         },
@@ -601,7 +592,7 @@ fn draw(demo: *DemoState) void {
 
     gctx.cmdlist.OMSetRenderTargets(
         1,
-        &[_]d3d12.CPU_DESCRIPTOR_HANDLE{back_buffer.descriptor_handle},
+        &.{back_buffer.descriptor_handle},
         w32.TRUE,
         null,
     );
@@ -620,24 +611,26 @@ fn draw(demo: *DemoState) void {
     gctx.flushResourceBarriers();
 
     gctx.setCurrentPipeline(demo.buffer_to_texture_pso);
-    gctx.cmdlist.SetComputeRootDescriptorTable(0, blk: {
-        const table = gctx.copyDescriptorsToGpuHeap(1, demo.input_buffer_srv);
-        _ = gctx.copyDescriptorsToGpuHeap(1, demo.image_texture_uav);
-        break :blk table;
+    gctx.setComputeRootDescriptorTable(0, &.{
+        demo.input_buffer_srv,
+        demo.image_texture_uav,
     });
+
     gctx.cmdlist.Dispatch((image_size + 7) / 8, (image_size + 7) / 8, 1);
 
     gctx.addTransitionBarrier(demo.image_texture, .{ .PIXEL_SHADER_RESOURCE = true });
     gctx.flushResourceBarriers();
 
-    gctx.cmdlist.RSSetViewports(1, &[_]d3d12.VIEWPORT{.{
-        .TopLeftX = 0.0,
-        .TopLeftY = 0.0,
-        .Width = @as(f32, @floatFromInt(gctx.viewport_width / 2)),
-        .Height = @as(f32, @floatFromInt(gctx.viewport_width / 2)),
-        .MinDepth = 0.0,
-        .MaxDepth = 1.0,
-    }});
+    gctx.cmdlist.RSSetViewports(1, &.{
+        .{
+            .TopLeftX = 0.0,
+            .TopLeftY = 0.0,
+            .Width = @as(f32, @floatFromInt(gctx.viewport_width / 2)),
+            .Height = @as(f32, @floatFromInt(gctx.viewport_width / 2)),
+            .MinDepth = 0.0,
+            .MaxDepth = 1.0,
+        },
+    });
 
     gctx.setCurrentPipeline(demo.draw_texture_pso);
     gctx.cmdlist.IASetPrimitiveTopology(.TRIANGLELIST);
@@ -652,24 +645,25 @@ fn draw(demo: *DemoState) void {
     gctx.flushResourceBarriers();
 
     gctx.setCurrentPipeline(demo.buffer_to_texture_pso);
-    gctx.cmdlist.SetComputeRootDescriptorTable(0, blk: {
-        const table = gctx.copyDescriptorsToGpuHeap(1, demo.output_buffer_srv);
-        _ = gctx.copyDescriptorsToGpuHeap(1, demo.image_texture_uav);
-        break :blk table;
+    gctx.setComputeRootDescriptorTable(0, &.{
+        demo.output_buffer_srv,
+        demo.image_texture_uav,
     });
     gctx.cmdlist.Dispatch((image_size + 7) / 8, (image_size + 7) / 8, 1);
 
     gctx.addTransitionBarrier(demo.image_texture, .{ .PIXEL_SHADER_RESOURCE = true });
     gctx.flushResourceBarriers();
 
-    gctx.cmdlist.RSSetViewports(1, &[_]d3d12.VIEWPORT{.{
-        .TopLeftX = @as(f32, @floatFromInt(gctx.viewport_width / 2)),
-        .TopLeftY = 0.0,
-        .Width = @as(f32, @floatFromInt(gctx.viewport_width / 2)),
-        .Height = @as(f32, @floatFromInt(gctx.viewport_width / 2)),
-        .MinDepth = 0.0,
-        .MaxDepth = 1.0,
-    }});
+    gctx.cmdlist.RSSetViewports(1, &.{
+        .{
+            .TopLeftX = @as(f32, @floatFromInt(gctx.viewport_width / 2)),
+            .TopLeftY = 0.0,
+            .Width = @as(f32, @floatFromInt(gctx.viewport_width / 2)),
+            .Height = @as(f32, @floatFromInt(gctx.viewport_width / 2)),
+            .MinDepth = 0.0,
+            .MaxDepth = 1.0,
+        },
+    });
 
     gctx.setCurrentPipeline(demo.draw_texture_pso);
     gctx.cmdlist.IASetPrimitiveTopology(.TRIANGLELIST);
