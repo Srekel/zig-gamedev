@@ -1044,6 +1044,10 @@ ZGUI_API void zguiNewFrame(void) {
     ImGui::NewFrame();
 }
 
+ZGUI_API void zguiEndFrame(void) {
+    ImGui::EndFrame();
+}
+
 ZGUI_API void zguiRender(void) {
     ImGui::Render();
 }
